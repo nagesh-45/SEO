@@ -20,6 +20,8 @@ public class SimpleLiveSearchGUI extends JFrame {
     private final JLabel statusLabel;
     private final JComboBox<String> searchTypeCombo;
     private final JTextField pathField;
+    private final JProgressBar progressBar;
+    private final JTextField selectedFilePathField;
     private List<LiveFileSearch.SearchResult> lastResults;
     
     public SimpleLiveSearchGUI() {
@@ -37,6 +39,8 @@ public class SimpleLiveSearchGUI extends JFrame {
         pathField = new JTextField(System.getProperty("user.home"), 30);
         resultsList = new JList<>();
         statusLabel = new JLabel("Ready");
+        progressBar = new JProgressBar();
+        selectedFilePathField = new JTextField(80);
         
         // Setup layout
         setupLayout();
@@ -84,6 +88,11 @@ public class SimpleLiveSearchGUI extends JFrame {
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 3; gbc.fill = GridBagConstraints.HORIZONTAL;
         topPanel.add(statusLabel, gbc);
         
+        // Progress bar
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 3; gbc.fill = GridBagConstraints.HORIZONTAL;
+        progressBar.setVisible(false); // Hidden by default
+        topPanel.add(progressBar, gbc);
+        
         add(topPanel, BorderLayout.NORTH);
         
         // Results area with scroll pane
@@ -92,28 +101,42 @@ public class SimpleLiveSearchGUI extends JFrame {
         add(scrollPane, BorderLayout.CENTER);
         
         // Bottom panel for actions
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(new EmptyBorder(5, 10, 10, 10));
         
+        // Top row with clear button
+        JPanel topRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton clearButton = new JButton("Clear Results");
-        bottomPanel.add(clearButton);
+        topRow.add(clearButton);
+        bottomPanel.add(topRow, BorderLayout.NORTH);
+        
+        // Bottom row with file path display
+        JPanel bottomRow = new JPanel(new BorderLayout(5, 0));
+        bottomRow.add(new JLabel("Selected File Path: "), BorderLayout.WEST);
+        selectedFilePathField.setEditable(false);
+        selectedFilePathField.setBackground(Color.LIGHT_GRAY);
+        bottomRow.add(selectedFilePathField, BorderLayout.CENTER);
+        bottomPanel.add(bottomRow, BorderLayout.CENTER);
         
         add(bottomPanel, BorderLayout.SOUTH);
     }
     
     private void setupActions() {
-        // Search button action
+        // Search button action - it's the 6th component in the top panel
         JButton searchButton = (JButton) ((JPanel) getContentPane().getComponent(0)).getComponent(6);
         searchButton.addActionListener(e -> performSearch());
         
         // Enter key in search field
         searchField.addActionListener(e -> performSearch());
         
-        // Clear button action
-        JButton clearButton = (JButton) ((JPanel) getContentPane().getComponent(2)).getComponent(0);
+        // Clear button action - it's in the bottom panel, first component of the top row
+        JPanel bottomPanel = (JPanel) getContentPane().getComponent(2);
+        JPanel topRow = (JPanel) bottomPanel.getComponent(0);
+        JButton clearButton = (JButton) topRow.getComponent(0);
         clearButton.addActionListener(e -> {
             resultsList.setListData(new String[]{});
             lastResults.clear();
+            selectedFilePathField.setText("");
             statusLabel.setText("Results cleared");
         });
     }
@@ -140,12 +163,15 @@ public class SimpleLiveSearchGUI extends JFrame {
             return;
         }
         
+        // Show progress bar and disable search button
+        progressBar.setVisible(true);
+        progressBar.setIndeterminate(true);
+        statusLabel.setText("Searching...");
+        
         // Perform search in background
         SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                statusLabel.setText("Searching...");
-                
                 long startTime = System.currentTimeMillis();
                 
                 if ("Content".equals(searchType)) {
@@ -159,6 +185,9 @@ public class SimpleLiveSearchGUI extends JFrame {
                 
                 SwingUtilities.invokeLater(() -> {
                     displayResults(searchType, searchTime);
+                    // Hide progress bar
+                    progressBar.setVisible(false);
+                    progressBar.setIndeterminate(false);
                 });
                 
                 return null;
@@ -196,6 +225,24 @@ public class SimpleLiveSearchGUI extends JFrame {
     private void setupResultsList() {
         // Set monospaced font for better column alignment
         resultsList.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        
+        // Setup progress bar
+        progressBar.setStringPainted(true);
+        progressBar.setString("Searching...");
+        
+        // Add selection listener to show file path
+        resultsList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int index = resultsList.getSelectedIndex();
+                // Skip header (index 0) and separator (index 1)
+                if (index >= 2 && index < lastResults.size() + 2) {
+                    LiveFileSearch.SearchResult result = lastResults.get(index - 2);
+                    selectedFilePathField.setText(result.getFilePath());
+                } else {
+                    selectedFilePathField.setText("");
+                }
+            }
+        });
         
         resultsList.addMouseListener(new MouseAdapter() {
             @Override

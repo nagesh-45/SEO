@@ -224,6 +224,16 @@ public class LiveFileSearch {
             return fileName; // Just the file name for simple display
         }
         
+        private String formatPath(String fullPath) {
+            // Show the full directory path without truncation
+            Path path = Paths.get(fullPath);
+            Path parent = path.getParent();
+            if (parent != null) {
+                return parent.toString();
+            }
+            return ".";
+        }
+        
         private String formatSize(long bytes) {
             if (bytes < 1024) return bytes + " B";
             if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
