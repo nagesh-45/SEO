@@ -93,10 +93,21 @@ public class SimpleLiveSearchCLI {
         if (lastResults.isEmpty()) {
             System.out.println("No files found.");
         } else {
+            // Print table header
+            System.out.println(String.format("%-4s | %-50s | %-10s | %-12s | %s", 
+                "#", "File Name", "Size", "Type", "Modified"));
+            System.out.println(String.format("%-4s-+-%-50s-+-%-10s-+-%-12s-+-%s", 
+                "", "", "", "", ""));
+            
+            // Print results
             for (int i = 0; i < lastResults.size(); i++) {
                 LiveFileSearch.SearchResult result = lastResults.get(i);
-                System.out.printf("%d. %s%n", i + 1, result.toString());
+                System.out.printf("%-4d | %s%n", i + 1, result.toString());
             }
+            
+            // Print table footer
+            System.out.println(String.format("%-4s-+-%-50s-+-%-10s-+-%-12s-+-%s", 
+                "", "", "", "", ""));
         }
         System.out.println();
     }

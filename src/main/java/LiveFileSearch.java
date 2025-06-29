@@ -40,10 +40,11 @@ public class LiveFileSearch {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                     if (attrs.isRegularFile()) {
-                        String fileName = file.getFileName().toString().toLowerCase();
+                        String fileName = file.getFileName().toString();
+                        String fileNameLower = fileName.toLowerCase();
                         String searchLower = searchTerm.toLowerCase();
                         
-                        if (fileName.contains(searchLower)) {
+                        if (fileNameLower.contains(searchLower)) {
                             try {
                                 SearchResult result = new SearchResult(
                                     file.toString(),
@@ -116,15 +117,16 @@ public class LiveFileSearch {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                     if (attrs.isRegularFile() && attrs.size() <= MAX_FILE_SIZE) {
-                        String fileName = file.getFileName().toString().toLowerCase();
+                        String fileName = file.getFileName().toString();
+                        String fileNameLower = fileName.toLowerCase();
                         
                         // Skip binary files and large files
-                        if (isTextFile(fileName)) {
+                        if (isTextFile(fileNameLower)) {
                             try {
                                 if (searchInFile(file, searchTerm)) {
                                     SearchResult result = new SearchResult(
                                         file.toString(),
-                                        file.getFileName().toString(),
+                                        fileName, // Keep original case
                                         attrs.size(),
                                         attrs.lastModifiedTime().toMillis(),
                                         SearchType.CONTENT
@@ -211,8 +213,27 @@ public class LiveFileSearch {
         
         @Override
         public String toString() {
-            return String.format("%s (%s, %d bytes, %s)", 
-                fileName, searchType, size, new Date(lastModified));
+            return String.format("%-50s  %-10s  %-12s  %s", 
+                truncateFileName(fileName, 47),
+                formatSize(size),
+                searchType.toString(),
+                new java.text.SimpleDateFormat("MMM dd HH:mm").format(new Date(lastModified)));
+        }
+        
+        public String getDisplayName() {
+            return fileName; // Just the file name for simple display
+        }
+        
+        private String truncateFileName(String name, int maxLength) {
+            if (name.length() <= maxLength) return name;
+            return name.substring(0, maxLength - 3) + "...";
+        }
+        
+        private String formatSize(long bytes) {
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+            if (bytes < 1024 * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+            return String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0));
         }
     }
 } 

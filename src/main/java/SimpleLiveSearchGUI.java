@@ -3,6 +3,8 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,11 +16,10 @@ import java.awt.Desktop;
 public class SimpleLiveSearchGUI extends JFrame {
     private final LiveFileSearch searchEngine;
     private final JTextField searchField;
-    private final JTextArea resultsArea;
+    private final JList<String> resultsList;
     private final JLabel statusLabel;
     private final JComboBox<String> searchTypeCombo;
     private final JTextField pathField;
-    private final JTextField fileNumberField;
     private List<LiveFileSearch.SearchResult> lastResults;
     
     public SimpleLiveSearchGUI() {
@@ -27,24 +28,22 @@ public class SimpleLiveSearchGUI extends JFrame {
         
         setTitle("Simple Live File Search");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(800, 600);
+        setSize(900, 600);
         setLocationRelativeTo(null);
         
         // Create components
         searchField = new JTextField(30);
         searchTypeCombo = new JComboBox<>(new String[]{"Name", "Content"});
         pathField = new JTextField(System.getProperty("user.home"), 30);
-        fileNumberField = new JTextField(5);
-        resultsArea = new JTextArea();
+        resultsList = new JList<>();
         statusLabel = new JLabel("Ready");
         
         // Setup layout
         setupLayout();
         setupActions();
         
-        // Make results area read-only
-        resultsArea.setEditable(false);
-        resultsArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        // Setup list with double-click functionality
+        setupResultsList();
     }
     
     private void setupLayout() {
@@ -88,20 +87,15 @@ public class SimpleLiveSearchGUI extends JFrame {
         add(topPanel, BorderLayout.NORTH);
         
         // Results area with scroll pane
-        JScrollPane scrollPane = new JScrollPane(resultsArea);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Search Results"));
+        JScrollPane scrollPane = new JScrollPane(resultsList);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Search Results (Double-click to open)"));
         add(scrollPane, BorderLayout.CENTER);
         
         // Bottom panel for actions
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         bottomPanel.setBorder(new EmptyBorder(5, 10, 10, 10));
         
-        bottomPanel.add(new JLabel("File #:"));
-        bottomPanel.add(fileNumberField);
-        
-        JButton openButton = new JButton("Open File");
         JButton clearButton = new JButton("Clear Results");
-        bottomPanel.add(openButton);
         bottomPanel.add(clearButton);
         
         add(bottomPanel, BorderLayout.SOUTH);
@@ -115,17 +109,11 @@ public class SimpleLiveSearchGUI extends JFrame {
         // Enter key in search field
         searchField.addActionListener(e -> performSearch());
         
-        // Enter key in file number field
-        fileNumberField.addActionListener(e -> openFileByNumber());
-        
-        // Open button action
-        JButton openButton = (JButton) ((JPanel) getContentPane().getComponent(2)).getComponent(2);
-        openButton.addActionListener(e -> openFileByNumber());
-        
         // Clear button action
-        JButton clearButton = (JButton) ((JPanel) getContentPane().getComponent(2)).getComponent(3);
+        JButton clearButton = (JButton) ((JPanel) getContentPane().getComponent(2)).getComponent(0);
         clearButton.addActionListener(e -> {
-            resultsArea.setText("");
+            resultsList.setListData(new String[]{});
+            lastResults.clear();
             statusLabel.setText("Results cleared");
         });
     }
@@ -181,49 +169,47 @@ public class SimpleLiveSearchGUI extends JFrame {
     }
     
     private void displayResults(String searchType, long searchTime) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== ").append(searchType).append(" Search Results (").append(searchTime).append("ms) ===\n\n");
-        
         if (lastResults.isEmpty()) {
-            sb.append("No files found.\n");
+            resultsList.setListData(new String[]{"No files found."});
         } else {
+            // Create header and data
+            String header = String.format("%-50s  %-10s  %-12s  %s", 
+                "File Name", "Size", "Type", "Modified");
+            String separator = String.format("%-50s  %-10s  %-12s  %s", 
+                "", "", "", "").replace(" ", "-");
+            
+            // Convert results to display strings
+            String[] displayData = new String[lastResults.size() + 2];
+            displayData[0] = header;
+            displayData[1] = separator;
+            
             for (int i = 0; i < lastResults.size(); i++) {
-                LiveFileSearch.SearchResult result = lastResults.get(i);
-                sb.append(String.format("%d. %s\n", i + 1, result.toString()));
+                displayData[i + 2] = lastResults.get(i).toString();
             }
+            
+            resultsList.setListData(displayData);
         }
         
-        resultsArea.setText(sb.toString());
         statusLabel.setText(String.format("Found %d files in %dms", lastResults.size(), searchTime));
     }
     
-    private void openFileByNumber() {
-        String numberStr = fileNumberField.getText().trim();
+    private void setupResultsList() {
+        // Set monospaced font for better column alignment
+        resultsList.setFont(new Font("Monospaced", Font.PLAIN, 12));
         
-        if (numberStr.isEmpty()) {
-            statusLabel.setText("Please enter a file number");
-            return;
-        }
-        
-        try {
-            int number = Integer.parseInt(numberStr);
-            
-            if (lastResults.isEmpty()) {
-                statusLabel.setText("No search results available. Please perform a search first.");
-                return;
+        resultsList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) { // Double-click
+                    int index = resultsList.locationToIndex(e.getPoint());
+                    // Skip header (index 0) and separator (index 1)
+                    if (index >= 2 && index < lastResults.size() + 2) {
+                        LiveFileSearch.SearchResult result = lastResults.get(index - 2);
+                        openFile(result.getFilePath());
+                    }
+                }
             }
-            
-            if (number > 0 && number <= lastResults.size()) {
-                LiveFileSearch.SearchResult result = lastResults.get(number - 1);
-                statusLabel.setText("Opening file #" + number + ": " + result.getFileName());
-                openFile(result.getFilePath());
-                fileNumberField.setText(""); // Clear the field after opening
-            } else {
-                statusLabel.setText("Invalid file number: " + number + ". Available: 1-" + lastResults.size());
-            }
-        } catch (NumberFormatException e) {
-            statusLabel.setText("Invalid number format: " + numberStr);
-        }
+        });
     }
     
     private void openFile(String filePath) {
