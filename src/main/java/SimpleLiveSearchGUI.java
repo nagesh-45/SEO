@@ -28,7 +28,7 @@ public class SimpleLiveSearchGUI extends JFrame {
         
         setTitle("Simple Live File Search");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(1200, 600);
         setLocationRelativeTo(null);
         
         // Create components
@@ -173,9 +173,9 @@ public class SimpleLiveSearchGUI extends JFrame {
             resultsList.setListData(new String[]{"No files found."});
         } else {
             // Create header and data
-            String header = String.format("%-50s  %-10s  %-12s  %s", 
+            String header = String.format("%-100s  %-8s  %-8s  %s", 
                 "File Name", "Size", "Type", "Modified");
-            String separator = String.format("%-50s  %-10s  %-12s  %s", 
+            String separator = String.format("%-100s  %-8s  %-8s  %s", 
                 "", "", "", "").replace(" ", "-");
             
             // Convert results to display strings

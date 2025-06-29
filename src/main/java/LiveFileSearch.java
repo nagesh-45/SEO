@@ -213,8 +213,8 @@ public class LiveFileSearch {
         
         @Override
         public String toString() {
-            return String.format("%-50s  %-10s  %-12s  %s", 
-                truncateFileName(fileName, 47),
+            return String.format("%-100s  %-8s  %-8s  %s", 
+                fileName, // Show entire filename without truncation
                 formatSize(size),
                 searchType.toString(),
                 new java.text.SimpleDateFormat("MMM dd HH:mm").format(new Date(lastModified)));
@@ -222,11 +222,6 @@ public class LiveFileSearch {
         
         public String getDisplayName() {
             return fileName; // Just the file name for simple display
-        }
-        
-        private String truncateFileName(String name, int maxLength) {
-            if (name.length() <= maxLength) return name;
-            return name.substring(0, maxLength - 3) + "...";
         }
         
         private String formatSize(long bytes) {
