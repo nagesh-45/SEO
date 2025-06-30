@@ -1,3 +1,5 @@
+package searchengine;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -22,13 +24,15 @@ public class SimpleLiveSearchGUI extends JFrame {
     private final JTextField pathField;
     private final JProgressBar progressBar;
     private final JTextField selectedFilePathField;
+    private final JCheckBox regexCheckBox;
+    private final JCheckBox fuzzyCheckBox;
     private List<LiveFileSearch.SearchResult> lastResults;
     
     public SimpleLiveSearchGUI() {
         this.searchEngine = new LiveFileSearch();
         this.lastResults = new java.util.ArrayList<>();
         
-        setTitle("Simple Live File Search");
+        setTitle("File Search");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1200, 600);
         setLocationRelativeTo(null);
@@ -41,10 +45,11 @@ public class SimpleLiveSearchGUI extends JFrame {
         statusLabel = new JLabel("Ready");
         progressBar = new JProgressBar();
         selectedFilePathField = new JTextField(80);
+        regexCheckBox = new JCheckBox("Use Regex");
+        fuzzyCheckBox = new JCheckBox("Fuzzy Search");
         
         // Setup layout
         setupLayout();
-        setupActions();
         
         // Setup list with double-click functionality
         setupResultsList();
@@ -72,6 +77,12 @@ public class SimpleLiveSearchGUI extends JFrame {
         
         gbc.gridx = 1; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0;
         topPanel.add(searchTypeCombo, gbc);
+        
+        gbc.gridx = 2; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0;
+        topPanel.add(regexCheckBox, gbc);
+        
+        gbc.gridx = 3; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0;
+        topPanel.add(fuzzyCheckBox, gbc);
         
         gbc.gridx = 0; gbc.gridy = 2;
         topPanel.add(new JLabel("Search Term:"), gbc);
@@ -119,20 +130,19 @@ public class SimpleLiveSearchGUI extends JFrame {
         bottomPanel.add(bottomRow, BorderLayout.CENTER);
         
         add(bottomPanel, BorderLayout.SOUTH);
+        
+        // Setup actions with direct button references
+        setupActions(searchButton, clearButton);
     }
     
-    private void setupActions() {
-        // Search button action - it's the 6th component in the top panel
-        JButton searchButton = (JButton) ((JPanel) getContentPane().getComponent(0)).getComponent(6);
+    private void setupActions(JButton searchButton, JButton clearButton) {
+        // Search button action
         searchButton.addActionListener(e -> performSearch());
         
         // Enter key in search field
         searchField.addActionListener(e -> performSearch());
         
-        // Clear button action - it's in the bottom panel, first component of the top row
-        JPanel bottomPanel = (JPanel) getContentPane().getComponent(2);
-        JPanel topRow = (JPanel) bottomPanel.getComponent(0);
-        JButton clearButton = (JButton) topRow.getComponent(0);
+        // Clear button action
         clearButton.addActionListener(e -> {
             resultsList.setListData(new String[]{});
             lastResults.clear();
@@ -145,6 +155,8 @@ public class SimpleLiveSearchGUI extends JFrame {
         String searchTerm = searchField.getText().trim();
         String searchPath = pathField.getText().trim();
         String searchType = (String) searchTypeCombo.getSelectedItem();
+        boolean useRegex = regexCheckBox.isSelected();
+        boolean useFuzzy = fuzzyCheckBox.isSelected();
         
         if (searchTerm.isEmpty()) {
             statusLabel.setText("Please enter a search term");
@@ -154,6 +166,16 @@ public class SimpleLiveSearchGUI extends JFrame {
         if (searchPath.isEmpty()) {
             statusLabel.setText("Please enter a search path");
             return;
+        }
+        
+        // Validate regex if enabled
+        if (useRegex) {
+            try {
+                java.util.regex.Pattern.compile(searchTerm);
+            } catch (java.util.regex.PatternSyntaxException e) {
+                statusLabel.setText("Invalid regex pattern: " + e.getMessage());
+                return;
+            }
         }
         
         // Validate path
@@ -175,9 +197,9 @@ public class SimpleLiveSearchGUI extends JFrame {
                 long startTime = System.currentTimeMillis();
                 
                 if ("Content".equals(searchType)) {
-                    lastResults = searchEngine.searchByContent(searchTerm, searchPath);
+                    lastResults = searchEngine.searchByContent(searchTerm, searchPath, useRegex, useFuzzy);
                 } else {
-                    lastResults = searchEngine.searchByName(searchTerm, searchPath);
+                    lastResults = searchEngine.searchByName(searchTerm, searchPath, useRegex, useFuzzy);
                 }
                 
                 long endTime = System.currentTimeMillis();

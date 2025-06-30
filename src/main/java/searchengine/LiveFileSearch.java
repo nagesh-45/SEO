@@ -1,3 +1,5 @@
+package searchengine;
+
 import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -18,14 +20,32 @@ public class LiveFileSearch {
         this.executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
     
-    public List<SearchResult> searchByName(String searchTerm, String rootPath) {
-        List<SearchResult> results = new ArrayList<>();
-        Path root = Paths.get(rootPath);
+    public List<SearchResult> searchByName(String searchTerm, String rootPath, boolean useRegex) {
+        return searchByName(searchTerm, rootPath, useRegex, false);
+    }
+    
+    public List<SearchResult> searchByName(String searchTerm, String rootPath, boolean useRegex, boolean useFuzzy) {
+        if (useFuzzy) {
+            return searchByNameFuzzy(searchTerm, rootPath);
+        }
         
+        final List<SearchResult> results = new ArrayList<>();
+        final Path root = Paths.get(rootPath);
+        final String searchTermFinal = searchTerm;
         if (!Files.exists(root)) {
             return results;
         }
-        
+        final java.util.regex.Pattern pattern;
+        if (useRegex) {
+            try {
+                pattern = java.util.regex.Pattern.compile(searchTerm, java.util.regex.Pattern.CASE_INSENSITIVE);
+            } catch (java.util.regex.PatternSyntaxException e) {
+                System.err.println("Invalid regex pattern: " + e.getMessage());
+                return results;
+            }
+        } else {
+            pattern = null;
+        }
         try {
             Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
                 @Override
@@ -42,13 +62,20 @@ public class LiveFileSearch {
                     if (attrs.isRegularFile()) {
                         String fileName = file.getFileName().toString();
                         String fileNameLower = fileName.toLowerCase();
-                        String searchLower = searchTerm.toLowerCase();
+                        String searchLower = searchTermFinal.toLowerCase();
                         
-                        if (fileNameLower.contains(searchLower)) {
+                        boolean matches = false;
+                        if (useRegex && pattern != null) {
+                            matches = pattern.matcher(fileName).find();
+                        } else {
+                            matches = fileNameLower.contains(searchLower);
+                        }
+                        
+                        if (matches) {
                             try {
                                 SearchResult result = new SearchResult(
                                     file.toString(),
-                                    fileName,
+                                    fileName, // Keep original case
                                     attrs.size(),
                                     attrs.lastModifiedTime().toMillis(),
                                     SearchType.NAME
@@ -75,7 +102,7 @@ public class LiveFileSearch {
         results.sort((a, b) -> {
             String aName = a.getFileName().toLowerCase();
             String bName = b.getFileName().toLowerCase();
-            String searchLower = searchTerm.toLowerCase();
+            String searchLower = searchTermFinal.toLowerCase();
             
             boolean aExact = aName.equals(searchLower);
             boolean bExact = bName.equals(searchLower);
@@ -95,12 +122,137 @@ public class LiveFileSearch {
         return results;
     }
     
-    public List<SearchResult> searchByContent(String searchTerm, String rootPath) {
+    // Overload for backward compatibility
+    public List<SearchResult> searchByName(String searchTerm, String rootPath) {
+        return searchByName(searchTerm, rootPath, false);
+    }
+    
+    // New method for fuzzy search - splits terms and finds files containing all terms
+    public List<SearchResult> searchByNameFuzzy(String searchTerm, String rootPath) {
+        String[] terms = searchTerm.toLowerCase().split("\\s+");
+        List<String> searchTerms = new ArrayList<>();
+        for (String term : terms) {
+            if (!term.trim().isEmpty()) {
+                searchTerms.add(term.trim());
+            }
+        }
+        
+        if (searchTerms.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
         List<SearchResult> results = new ArrayList<>();
         Path root = Paths.get(rootPath);
         
         if (!Files.exists(root)) {
             return results;
+        }
+        
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    String dirName = dir.getFileName().toString();
+                    if (SKIP_DIRECTORIES.contains(dirName) || dirName.startsWith(".")) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+                
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (attrs.isRegularFile()) {
+                        String fileName = file.getFileName().toString();
+                        String fileNameLower = fileName.toLowerCase();
+                        
+                        // Check if ALL search terms are present in the filename
+                        boolean allTermsFound = true;
+                        for (String term : searchTerms) {
+                            if (!fileNameLower.contains(term)) {
+                                allTermsFound = false;
+                                break;
+                            }
+                        }
+                        
+                        if (allTermsFound) {
+                            try {
+                                SearchResult result = new SearchResult(
+                                    file.toString(),
+                                    fileName,
+                                    attrs.size(),
+                                    attrs.lastModifiedTime().toMillis(),
+                                    SearchType.NAME
+                                );
+                                results.add(result);
+                            } catch (Exception e) {
+                                // Skip files with access issues
+                            }
+                        }
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+                
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("Error searching files: " + e.getMessage());
+        }
+        
+        results.sort((a, b) -> {
+            String aName = a.getFileName().toLowerCase();
+            String bName = b.getFileName().toLowerCase();
+            
+            int aExactMatches = 0, bExactMatches = 0;
+            for (String term : searchTerms) {
+                if (aName.equals(term)) aExactMatches++;
+                if (bName.equals(term)) bExactMatches++;
+            }
+            
+            if (aExactMatches != bExactMatches) {
+                return Integer.compare(bExactMatches, aExactMatches);
+            }
+            
+            int aStartsWith = 0, bStartsWith = 0;
+            for (String term : searchTerms) {
+                if (aName.startsWith(term)) aStartsWith++;
+                if (bName.startsWith(term)) bStartsWith++;
+            }
+            
+            if (aStartsWith != bStartsWith) {
+                return Integer.compare(bStartsWith, aStartsWith);
+            }
+            
+            return aName.compareTo(bName);
+        });
+        
+        return results;
+    }
+    
+    public List<SearchResult> searchByContent(String searchTerm, String rootPath, boolean useRegex) {
+        return searchByContent(searchTerm, rootPath, useRegex, false);
+    }
+    
+    public List<SearchResult> searchByContent(String searchTerm, String rootPath, boolean useRegex, boolean useFuzzy) {
+        // For content search, fuzzy search doesn't make sense, so we ignore the useFuzzy parameter
+        final List<SearchResult> results = new ArrayList<>();
+        final Path root = Paths.get(rootPath);
+        final String searchTermFinal = searchTerm;
+        if (!Files.exists(root)) {
+            return results;
+        }
+        final java.util.regex.Pattern pattern;
+        if (useRegex) {
+            try {
+                pattern = java.util.regex.Pattern.compile(searchTerm, java.util.regex.Pattern.CASE_INSENSITIVE);
+            } catch (java.util.regex.PatternSyntaxException e) {
+                System.err.println("Invalid regex pattern: " + e.getMessage());
+                return results;
+            }
+        } else {
+            pattern = null;
         }
         
         try {
@@ -123,7 +275,14 @@ public class LiveFileSearch {
                         // Skip binary files and large files
                         if (isTextFile(fileNameLower)) {
                             try {
-                                if (searchInFile(file, searchTerm)) {
+                                boolean found = false;
+                                if (useRegex && pattern != null) {
+                                    found = searchInFileWithRegex(file, pattern);
+                                } else {
+                                    found = searchInFile(file, searchTermFinal);
+                                }
+                                
+                                if (found) {
                                     SearchResult result = new SearchResult(
                                         file.toString(),
                                         fileName, // Keep original case
@@ -156,6 +315,11 @@ public class LiveFileSearch {
         return results;
     }
     
+    // Overload for backward compatibility
+    public List<SearchResult> searchByContent(String searchTerm, String rootPath) {
+        return searchByContent(searchTerm, rootPath, false);
+    }
+    
     private boolean isTextFile(String fileName) {
         String lowerName = fileName.toLowerCase();
         return lowerName.endsWith(".txt") || lowerName.endsWith(".md") || 
@@ -173,6 +337,20 @@ public class LiveFileSearch {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.toLowerCase().contains(searchTerm.toLowerCase())) {
+                    return true;
+                }
+            }
+        } catch (IOException e) {
+            // File cannot be read, skip it
+        }
+        return false;
+    }
+    
+    private boolean searchInFileWithRegex(Path file, java.util.regex.Pattern pattern) {
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (pattern.matcher(line).find()) {
                     return true;
                 }
             }

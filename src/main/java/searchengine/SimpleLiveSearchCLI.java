@@ -1,3 +1,5 @@
+package searchengine;
+
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -22,6 +24,9 @@ public class SimpleLiveSearchCLI {
         System.out.println("Commands:");
         System.out.println("  <search term> - Search by file name");
         System.out.println("  content <term> - Search by file content");
+        System.out.println("  fuzzy <term1 term2 ...> - Search by file name (all terms must be present)");
+        System.out.println("  regex <term> - Search by file name using regex");
+        System.out.println("  content-regex <term> - Search by file content using regex");
         System.out.println("  path <directory> - Change search directory");
         System.out.println("  open <number> - Open file by number");
         System.out.println("  <number> - Open file by number (shortcut)");
@@ -43,7 +48,22 @@ public class SimpleLiveSearchCLI {
             if (input.startsWith("content ")) {
                 String term = input.substring(8).trim();
                 if (!term.isEmpty()) {
-                    searchByContent(term);
+                    searchByContent(term, false);
+                }
+            } else if (input.startsWith("regex ")) {
+                String term = input.substring(6).trim();
+                if (!term.isEmpty()) {
+                    searchByName(term, true);
+                }
+            } else if (input.startsWith("content-regex ")) {
+                String term = input.substring(14).trim();
+                if (!term.isEmpty()) {
+                    searchByContent(term, true);
+                }
+            } else if (input.startsWith("fuzzy ")) {
+                String term = input.substring(6).trim();
+                if (!term.isEmpty()) {
+                    searchByNameFuzzy(term);
                 }
             } else if (input.startsWith("path ")) {
                 String path = input.substring(5).trim();
@@ -56,7 +76,7 @@ public class SimpleLiveSearchCLI {
                 openFileByNumber(input);
             } else {
                 // Default: search by file name
-                searchByName(input);
+                searchByName(input, false);
             }
         }
         
@@ -64,26 +84,39 @@ public class SimpleLiveSearchCLI {
         scanner.close();
     }
     
-    private void searchByName(String searchTerm) {
-        System.out.println("Searching for files with name containing: " + searchTerm);
+    private void searchByName(String searchTerm, boolean useRegex) {
+        String searchType = useRegex ? "Regex name search" : "Name search";
+        System.out.println("Searching for files with name " + (useRegex ? "matching regex" : "containing") + ": " + searchTerm);
         System.out.println("Searching in: " + currentSearchPath);
         
         long startTime = System.currentTimeMillis();
-        lastResults = searchEngine.searchByName(searchTerm, currentSearchPath);
+        lastResults = searchEngine.searchByName(searchTerm, currentSearchPath, useRegex);
         long endTime = System.currentTimeMillis();
         
-        displayResults("Name search", endTime - startTime);
+        displayResults(searchType, endTime - startTime);
     }
     
-    private void searchByContent(String searchTerm) {
-        System.out.println("Searching for files with content containing: " + searchTerm);
+    private void searchByContent(String searchTerm, boolean useRegex) {
+        String searchType = useRegex ? "Regex content search" : "Content search";
+        System.out.println("Searching for files with content " + (useRegex ? "matching regex" : "containing") + ": " + searchTerm);
         System.out.println("Searching in: " + currentSearchPath);
         
         long startTime = System.currentTimeMillis();
-        lastResults = searchEngine.searchByContent(searchTerm, currentSearchPath);
+        lastResults = searchEngine.searchByContent(searchTerm, currentSearchPath, useRegex);
         long endTime = System.currentTimeMillis();
         
-        displayResults("Content search", endTime - startTime);
+        displayResults(searchType, endTime - startTime);
+    }
+    
+    private void searchByNameFuzzy(String searchTerm) {
+        System.out.println("Fuzzy searching for files with name containing all terms: " + searchTerm);
+        System.out.println("Searching in: " + currentSearchPath);
+        
+        long startTime = System.currentTimeMillis();
+        lastResults = searchEngine.searchByNameFuzzy(searchTerm, currentSearchPath);
+        long endTime = System.currentTimeMillis();
+        
+        displayResults("Fuzzy name search", endTime - startTime);
     }
     
     private void displayResults(String searchType, long searchTime) {
