@@ -29,6 +29,7 @@ public class SimpleLiveSearchCLI {
         System.out.println("  content-regex <term> - Search by file content using regex");
         System.out.println("  path <directory> - Change search directory");
         System.out.println("  open <number> - Open file by number");
+        System.out.println("  delete <number> - Delete file by number");
         System.out.println("  <number> - Open file by number (shortcut)");
         System.out.println("  quit - Exit");
         System.out.println();
@@ -71,6 +72,9 @@ public class SimpleLiveSearchCLI {
             } else if (input.startsWith("open ")) {
                 String numberStr = input.substring(5).trim();
                 openFileByNumber(numberStr);
+            } else if (input.startsWith("delete ")) {
+                String numberStr = input.substring(7).trim();
+                deleteFileByNumber(numberStr);
             } else if (input.matches("\\d+")) {
                 // Just a number - open file by number
                 openFileByNumber(input);
@@ -220,6 +224,61 @@ public class SimpleLiveSearchCLI {
             System.out.println("Try opening manually: " + filePath);
         } catch (InterruptedException e) {
             System.out.println("❌ Process interrupted: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("❌ Unexpected error: " + e.getMessage());
+        }
+    }
+    
+    private void deleteFileByNumber(String numberStr) {
+        try {
+            int number = Integer.parseInt(numberStr);
+            
+            if (lastResults.isEmpty()) {
+                System.out.println("❌ No search results available. Please perform a search first.");
+                return;
+            }
+            
+            if (number > 0 && number <= lastResults.size()) {
+                LiveFileSearch.SearchResult result = lastResults.get(number - 1);
+                System.out.println("About to delete file #" + number + ": " + result.getFileName());
+                System.out.println("Full path: " + result.getFilePath());
+                System.out.print("Are you sure? Type 'yes' to confirm: ");
+                
+                String confirmation = scanner.nextLine().trim();
+                if ("yes".equalsIgnoreCase(confirmation)) {
+                    deleteFile(result.getFilePath());
+                    // Remove from results list
+                    lastResults.remove(number - 1);
+                    System.out.println("✓ File deleted successfully. Removed from results.");
+                } else {
+                    System.out.println("❌ Deletion cancelled.");
+                }
+            } else {
+                System.out.println("❌ Invalid file number: " + number);
+                System.out.println("Available files: 1-" + lastResults.size());
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("❌ Invalid number format: " + numberStr);
+        }
+    }
+    
+    private void deleteFile(String filePath) {
+        try {
+            Path path = Paths.get(filePath);
+            System.out.println("Attempting to delete: " + filePath);
+            
+            if (Files.exists(path)) {
+                boolean deleted = Files.deleteIfExists(path);
+                if (deleted) {
+                    System.out.println("✓ File deleted successfully: " + path.getFileName());
+                } else {
+                    System.out.println("❌ Failed to delete file: " + path.getFileName());
+                }
+            } else {
+                System.out.println("❌ File not found: " + filePath);
+            }
+        } catch (IOException e) {
+            System.out.println("❌ Error deleting file: " + e.getMessage());
         } catch (Exception e) {
             System.out.println("❌ Unexpected error: " + e.getMessage());
         }

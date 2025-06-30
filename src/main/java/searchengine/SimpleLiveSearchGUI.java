@@ -118,7 +118,9 @@ public class SimpleLiveSearchGUI extends JFrame {
         // Top row with clear button
         JPanel topRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton clearButton = new JButton("Clear Results");
+        JButton deleteButton = new JButton("Delete Selected");
         topRow.add(clearButton);
+        topRow.add(deleteButton);
         bottomPanel.add(topRow, BorderLayout.NORTH);
         
         // Bottom row with file path display
@@ -132,10 +134,10 @@ public class SimpleLiveSearchGUI extends JFrame {
         add(bottomPanel, BorderLayout.SOUTH);
         
         // Setup actions with direct button references
-        setupActions(searchButton, clearButton);
+        setupActions(searchButton, clearButton, deleteButton);
     }
     
-    private void setupActions(JButton searchButton, JButton clearButton) {
+    private void setupActions(JButton searchButton, JButton clearButton, JButton deleteButton) {
         // Search button action
         searchButton.addActionListener(e -> performSearch());
         
@@ -149,6 +151,9 @@ public class SimpleLiveSearchGUI extends JFrame {
             selectedFilePathField.setText("");
             statusLabel.setText("Results cleared");
         });
+        
+        // Delete button action
+        deleteButton.addActionListener(e -> deleteSelectedFile());
     }
     
     private void performSearch() {
@@ -323,6 +328,56 @@ public class SimpleLiveSearchGUI extends JFrame {
             statusLabel.setText("❌ Process interrupted: " + e.getMessage());
         } catch (Exception e) {
             statusLabel.setText("❌ Unexpected error: " + e.getMessage());
+        }
+    }
+    
+    private void deleteSelectedFile() {
+        int index = resultsList.getSelectedIndex();
+        // Skip header (index 0) and separator (index 1)
+        if (index < 2 || index >= lastResults.size() + 2) {
+            statusLabel.setText("Please select a file to delete");
+            return;
+        }
+        
+        LiveFileSearch.SearchResult result = lastResults.get(index - 2);
+        String fileName = result.getFileName();
+        String filePath = result.getFilePath();
+        
+        // Show confirmation dialog
+        int choice = JOptionPane.showConfirmDialog(
+            this,
+            "Are you sure you want to delete this file?\n\n" +
+            "File: " + fileName + "\n" +
+            "Path: " + filePath,
+            "Confirm Delete",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+        
+        if (choice == JOptionPane.YES_OPTION) {
+            try {
+                Path path = Paths.get(filePath);
+                if (Files.exists(path)) {
+                    boolean deleted = Files.deleteIfExists(path);
+                    if (deleted) {
+                        // Remove from results list
+                        lastResults.remove(index - 2);
+                        // Refresh the display
+                        displayResults("Name search", 0); // Reuse existing method
+                        statusLabel.setText("✓ File deleted successfully: " + fileName);
+                    } else {
+                        statusLabel.setText("❌ Failed to delete file: " + fileName);
+                    }
+                } else {
+                    statusLabel.setText("❌ File not found: " + fileName);
+                }
+            } catch (IOException e) {
+                statusLabel.setText("❌ Error deleting file: " + e.getMessage());
+            } catch (Exception e) {
+                statusLabel.setText("❌ Unexpected error: " + e.getMessage());
+            }
+        } else {
+            statusLabel.setText("Deletion cancelled");
         }
     }
     
